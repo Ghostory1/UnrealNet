@@ -32,6 +32,7 @@ void AABGameMode::PreLogin(const FString& Options, const FString& Address, const
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("======================================================="));
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
 	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
+	//ErrorMessage = TEXT("Server is Full");
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
 }
 
@@ -50,6 +51,31 @@ void AABGameMode::PostLogin(APlayerController* NewPlayer)
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
 
 	Super::PostLogin(NewPlayer);
+
+	UNetDriver* NetDriver = GetNetDriver();
+
+	if (NetDriver)
+	{
+		// 서버이기때문에, 클라이언트 커넥션들이 있어야 함
+		// 접속한 클라이언트가 없으면 없는게 맞음
+		if (NetDriver->ClientConnections.Num() == 0)
+		{
+			AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("No ClientConnections"));
+		}
+		else
+		{
+			for (const auto& Connection : NetDriver->ClientConnections)
+			{
+				AB_LOG(LogABNetwork, Log, TEXT("Client Connections : %s"),*Connection->GetName());
+			}
+		}
+	}
+	else
+	{
+		//없으면,
+		AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("No NetDriver"));
+	}
+
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
 }
 
