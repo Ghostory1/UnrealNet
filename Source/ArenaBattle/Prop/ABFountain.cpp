@@ -3,6 +3,8 @@
 
 #include "Prop/ABFountain.h"
 #include "Components/StaticMeshComponent.h"
+#include "Net/UnrealNetwork.h"
+#include "ArenaBattle.h"
 
 // Sets default values
 AABFountain::AABFountain()
@@ -28,6 +30,8 @@ AABFountain::AABFountain()
 	{
 		Water->SetStaticMesh(WaterMeshRef.Object);
 	}
+
+	bReplicates = true;
 }
 
 // Called when the game starts or when spawned
@@ -42,5 +46,41 @@ void AABFountain::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (HasAuthority())
+	{
+		// 서버
+		AddActorLocalRotation(FRotator(0.0f, 30.f * DeltaTime, 0.0f));
+		ServerRotationYaw = RootComponent->GetComponentRotation().Yaw;
+	}
+	else
+	{
+
+	}
 }
 
+void AABFountain::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AABFountain, ServerRotationYaw);
+}
+
+void AABFountain::OnActorChannelOpen(FInBunch& InBunch, UNetConnection* Connection)
+{
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+	Super::OnActorChannelOpen(InBunch, Connection);
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
+}
+
+void AABFountain::OnRep_ServerRotationYaw()
+{
+	//AB_LOG(LogABNetwork, Log, TEXT("Yaw: % f"), ServerRotationYaw);
+
+	// 클라이언트
+	// 전송된 데이터를 받아서 반영 해줘야함
+	FRotator NewRotator = RootComponent->GetComponentRotation();
+	NewRotator.Yaw = ServerRotationYaw;
+	RootComponent->SetWorldRotation(NewRotator);
+}
+
+	
