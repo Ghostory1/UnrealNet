@@ -37,9 +37,21 @@ public:
 	virtual void OnActorChannelOpen(class FInBunch& InBunch, class UNetConnection* Connection) override;
 	
 	virtual bool IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const override;
+	virtual void PreReplication(IRepChangedPropertyTracker& ChangedPropertyTracker) override;
 
 	UPROPERTY(ReplicatedUsing = OnRep_ServerRotationYaw)
 	float ServerRotationYaw;
+
+	UPROPERTY(ReplicatedUsing = OnRep_ServerLightColor)
+	FLinearColor ServerLightColor;
+
+	UFUNCTION()
+	void OnRep_ServerLightColor();
+
+	/*UPROPERTY(Replicated)
+	TArray<float> BigData;
+
+	float BigDataElement = 0.0f;*/
 
 	UFUNCTION()
 	void OnRep_ServerRotationYaw();

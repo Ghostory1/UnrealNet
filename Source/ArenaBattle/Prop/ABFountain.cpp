@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "ArenaBattle.h"
+#include "Components/PointLightComponent.h"
 
 // Sets default values
 AABFountain::AABFountain()
@@ -34,6 +35,7 @@ AABFountain::AABFountain()
 	bReplicates = true;
 	NetUpdateFrequency = 1.0f;
 	NetCullDistanceSquared = 4000000.0f;
+	//NetDormancy = DORM_Initial;
 }
 
 // Called when the game starts or when spawned
@@ -41,6 +43,27 @@ void AABFountain::BeginPlay()
 {
 	Super::BeginPlay();
 	
+	if (HasAuthority())
+	{
+		FTimerHandle Handle;
+		GetWorld()->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([&]
+			{
+				// float은 4바이트이기에 100개를 초기화 시키면 400 바이트씩 계속 보냄
+				/*BigData.Init(BigDataElement, 1000);
+				BigDataElement += 1.0f;*/
+				ServerLightColor = FLinearColor(FMath::RandRange(0.0f, 1.f), FMath::RandRange(0.0f, 1.f), FMath::RandRange(0.0f, 1.f), 1.0f);
+				//OnRep 함수의 경우 서버에서는 동작하지않기에 한번 호출해줘서 실행시켜주자
+				OnRep_ServerLightColor();
+			}
+		), 1.0f, true, 0.0f);
+
+		FTimerHandle Handle2;
+		GetWorld()->GetTimerManager().SetTimer(Handle2, FTimerDelegate::CreateLambda([&]
+			{
+				//FlushNetDormancy();
+			}
+		), 10.0f, false, -1.0f);
+	}
 }
 
 // Called every frame
@@ -74,6 +97,8 @@ void AABFountain::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AABFountain, ServerRotationYaw);
+	DOREPLIFETIME(AABFountain, ServerLightColor);
+	/*DOREPLIFETIME(AABFountain, BigData);*/
 }
 
 void AABFountain::OnActorChannelOpen(FInBunch& InBunch, UNetConnection* Connection)
@@ -93,9 +118,30 @@ bool AABFountain::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewT
 	return NetRelevantResult;
 }
 
+void AABFountain::PreReplication(IRepChangedPropertyTracker& ChangedPropertyTracker)
+{
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+	Super::PreReplication(ChangedPropertyTracker);
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
+}
+
+void AABFountain::OnRep_ServerLightColor()
+{
+	if (!HasAuthority())
+	{
+		AB_LOG(LogABNetwork, Log, TEXT("ServerLight Color : % s"), *ServerLightColor.ToString());
+	}
+	
+	UPointLightComponent* PointLight = Cast<UPointLightComponent>(GetComponentByClass(UPointLightComponent::StaticClass()));
+	if (PointLight)
+	{
+		PointLight->SetLightColor(ServerLightColor);
+	}
+}
+
 void AABFountain::OnRep_ServerRotationYaw()
 {
-	AB_LOG(LogABNetwork, Log, TEXT("Yaw: % f"), ServerRotationYaw);
+	//AB_LOG(LogABNetwork, Log, TEXT("Yaw: % f"), ServerRotationYaw);
 
 	// 클라이언트
 	// 전송된 데이터를 받아서 반영 해줘야함
