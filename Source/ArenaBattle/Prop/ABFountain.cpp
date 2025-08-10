@@ -32,6 +32,8 @@ AABFountain::AABFountain()
 	}
 
 	bReplicates = true;
+	NetUpdateFrequency = 1.0f;
+	NetCullDistanceSquared = 4000000.0f;
 }
 
 // Called when the game starts or when spawned
@@ -54,7 +56,16 @@ void AABFountain::Tick(float DeltaTime)
 	}
 	else
 	{
+		/*ClientTimeSinceUpdate += DeltaTime;
+		if (ClientTimeBetweenLastUpdate < KINDA_SMALL_NUMBER) return;
 
+		const float EstimateRotationYaw = ServerRotationYaw + 30.f * ClientTimeBetweenLastUpdate;
+		const float LerpRatio = ClientTimeSinceUpdate / ClientTimeBetweenLastUpdate;
+
+		FRotator ClientRotator = RootComponent->GetComponentRotation();
+		const float ClientNewYaw = FMath::Lerp(ServerRotationYaw, EstimateRotationYaw, LerpRatio);
+		ClientRotator.Yaw = ClientNewYaw;
+		RootComponent->SetWorldRotation(ClientRotator);*/
 	}
 }
 
@@ -72,15 +83,29 @@ void AABFountain::OnActorChannelOpen(FInBunch& InBunch, UNetConnection* Connecti
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
 }
 
+bool AABFountain::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const
+{
+	bool NetRelevantResult = Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
+	if (!NetRelevantResult)
+	{
+		AB_LOG(LogABNetwork, Log, TEXT("Not Relevant:[%s] %s"), *RealViewer->GetName(), *SrcLocation.ToCompactString());
+	}
+	return NetRelevantResult;
+}
+
 void AABFountain::OnRep_ServerRotationYaw()
 {
-	//AB_LOG(LogABNetwork, Log, TEXT("Yaw: % f"), ServerRotationYaw);
+	AB_LOG(LogABNetwork, Log, TEXT("Yaw: % f"), ServerRotationYaw);
 
 	// 클라이언트
 	// 전송된 데이터를 받아서 반영 해줘야함
 	FRotator NewRotator = RootComponent->GetComponentRotation();
 	NewRotator.Yaw = ServerRotationYaw;
 	RootComponent->SetWorldRotation(NewRotator);
+
+	//   최초에는 값이 0 이고 그 후로는 값이 갱신되니까 덮어씌움
+	ClientTimeBetweenLastUpdate = ClientTimeSinceUpdate;
+	ClientTimeSinceUpdate = 0.0f;
 }
 
 	
