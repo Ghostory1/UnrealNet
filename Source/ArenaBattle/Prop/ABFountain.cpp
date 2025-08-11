@@ -6,6 +6,7 @@
 #include "Net/UnrealNetwork.h"
 #include "ArenaBattle.h"
 #include "Components/PointLightComponent.h"
+#include "EngineUtils.h"
 
 // Sets default values
 AABFountain::AABFountain()
@@ -51,9 +52,15 @@ void AABFountain::BeginPlay()
 				// float은 4바이트이기에 100개를 초기화 시키면 400 바이트씩 계속 보냄
 				/*BigData.Init(BigDataElement, 1000);
 				BigDataElement += 1.0f;*/
-				ServerLightColor = FLinearColor(FMath::RandRange(0.0f, 1.f), FMath::RandRange(0.0f, 1.f), FMath::RandRange(0.0f, 1.f), 1.0f);
-				//OnRep 함수의 경우 서버에서는 동작하지않기에 한번 호출해줘서 실행시켜주자
-				OnRep_ServerLightColor();
+
+				// 리플리케이션 로직
+				//ServerLightColor = FLinearColor(FMath::RandRange(0.0f, 1.f), FMath::RandRange(0.0f, 1.f), FMath::RandRange(0.0f, 1.f), 1.0f);
+				////OnRep 함수의 경우 서버에서는 동작하지않기에 한번 호출해줘서 실행시켜주자
+				//OnRep_ServerLightColor();
+
+				// 멀티캐스트 RPC
+				//const FLinearColor NewLightColor = FLinearColor(FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), 1.0f);
+				//MulticastRPCChangeLightColor(NewLightColor);
 			}
 		), 1.0f, true, 0.0f);
 
@@ -61,8 +68,41 @@ void AABFountain::BeginPlay()
 		GetWorld()->GetTimerManager().SetTimer(Handle2, FTimerDelegate::CreateLambda([&]
 			{
 				//FlushNetDormancy();
+
+				//for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator ;++Iterator)
+				//{
+				//	APlayerController* PlayerController = Iterator->Get();
+				//	// 서버 입장에서는 로컬 플레이어가 아닌 것이 클라이언트이기 때문에 조건에 !
+				//	if (PlayerController && !PlayerController->IsLocalPlayerController())
+				//	{
+				//		SetOwner(PlayerController);
+				//		break;
+				//	}
+				//}
+
+				for (APlayerController* PlayerController : TActorRange<APlayerController>(GetWorld()))
+				{
+					if (PlayerController && !PlayerController->IsLocalPlayerController())
+					{
+						SetOwner(PlayerController);
+						break;
+					}
+				}
 			}
 		), 10.0f, false, -1.0f);
+	}
+	else
+	{
+		// 오너십 설정 -> 의미가 없었다.
+		//SetOwner(GetWorld()->GetFirstPlayerController());
+		
+		FTimerHandle Handle;
+		GetWorld()->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([&]
+			{
+				// 서버 RPC
+				ServerRPCChangeLightColor();
+			}
+		), 1.0f, true, 0.0f);
 	}
 }
 
@@ -76,6 +116,8 @@ void AABFountain::Tick(float DeltaTime)
 		// 서버
 		AddActorLocalRotation(FRotator(0.0f, 30.f * DeltaTime, 0.0f));
 		ServerRotationYaw = RootComponent->GetComponentRotation().Yaw;
+
+		
 	}
 	else
 	{
@@ -136,6 +178,27 @@ void AABFountain::OnRep_ServerLightColor()
 	if (PointLight)
 	{
 		PointLight->SetLightColor(ServerLightColor);
+	}
+}
+
+bool AABFountain::ServerRPCChangeLightColor_Validate()
+{
+	return false;
+}
+
+void AABFountain::ServerRPCChangeLightColor_Implementation()
+{
+	const FLinearColor NewLightColor = FLinearColor(FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), 1.0f);
+	MulticastRPCChangeLightColor(NewLightColor);
+}
+
+void AABFountain::MulticastRPCChangeLightColor_Implementation(const FLinearColor& NewColor)
+{
+	AB_LOG(LogABNetwork, Log, TEXT("ServerLight Color : % s"), *NewColor.ToString());
+	UPointLightComponent* PointLight = Cast<UPointLightComponent>(GetComponentByClass(UPointLightComponent::StaticClass()));
+	if (PointLight)
+	{
+		PointLight->SetLightColor(NewColor);
 	}
 }
 

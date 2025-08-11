@@ -47,6 +47,12 @@ public:
 
 	UFUNCTION()
 	void OnRep_ServerLightColor();
+	
+	UFUNCTION(NetMulticast, Unreliable )
+	void MulticastRPCChangeLightColor(const FLinearColor& NewColor);
+
+	UFUNCTION(Server, Unreliable, WithValidation)
+	void ServerRPCChangeLightColor();
 
 	/*UPROPERTY(Replicated)
 	TArray<float> BigData;
