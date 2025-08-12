@@ -61,48 +61,63 @@ void AABFountain::BeginPlay()
 				// 멀티캐스트 RPC
 				//const FLinearColor NewLightColor = FLinearColor(FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), 1.0f);
 				//MulticastRPCChangeLightColor(NewLightColor);
+
+				// 클라이언트 RPC
+				/*const FLinearColor NewLightColor = FLinearColor(FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), 1.0f);
+				ClientRPCChangeLightColor(NewLightColor);*/
 			}
 		), 1.0f, true, 0.0f);
 
-		FTimerHandle Handle2;
-		GetWorld()->GetTimerManager().SetTimer(Handle2, FTimerDelegate::CreateLambda([&]
-			{
-				//FlushNetDormancy();
+		//FTimerHandle Handle2;
+		//GetWorld()->GetTimerManager().SetTimer(Handle2, FTimerDelegate::CreateLambda([&]
+		//	{
+		//		//FlushNetDormancy();
 
-				//for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator ;++Iterator)
-				//{
-				//	APlayerController* PlayerController = Iterator->Get();
-				//	// 서버 입장에서는 로컬 플레이어가 아닌 것이 클라이언트이기 때문에 조건에 !
-				//	if (PlayerController && !PlayerController->IsLocalPlayerController())
-				//	{
-				//		SetOwner(PlayerController);
-				//		break;
-				//	}
-				//}
+		//		//for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator ;++Iterator)
+		//		//{
+		//		//	APlayerController* PlayerController = Iterator->Get();
+		//		//	// 서버 입장에서는 로컬 플레이어가 아닌 것이 클라이언트이기 때문에 조건에 !
+		//		//	if (PlayerController && !PlayerController->IsLocalPlayerController())
+		//		//	{
+		//		//		SetOwner(PlayerController);
+		//		//		break;
+		//		//	}
+		//		//}
 
-				for (APlayerController* PlayerController : TActorRange<APlayerController>(GetWorld()))
-				{
-					if (PlayerController && !PlayerController->IsLocalPlayerController())
-					{
-						SetOwner(PlayerController);
-						break;
-					}
-				}
-			}
-		), 10.0f, false, -1.0f);
+		//		for (APlayerController* PlayerController : TActorRange<APlayerController>(GetWorld()))
+		//		{
+		//			if (PlayerController && !PlayerController->IsLocalPlayerController())
+		//			{
+		//				SetOwner(PlayerController);
+		//				break;
+		//			}
+		//		}
+		//	}
+		//), 10.0f, false, -1.0f);
+		// 
+		// 
+		//FTimerHandle Handle3;
+		//GetWorld()->GetTimerManager().SetTimer(Handle3, FTimerDelegate::CreateLambda([&]
+		//	{
+		//		//ServerLightColor = FLinearColor(FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), 1.0f);
+		//		//OnRep_ServerLightColor();
+		//		//const FLinearColor NewLightColor = FLinearColor(FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), 1.0f);
+		//		//MulticastRPCChangeLightColor(NewLightColor);
+		//	}
+		//), 5.0f, false, -1.0f);
 	}
 	else
 	{
 		// 오너십 설정 -> 의미가 없었다.
 		//SetOwner(GetWorld()->GetFirstPlayerController());
 		
-		FTimerHandle Handle;
-		GetWorld()->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([&]
-			{
-				// 서버 RPC
-				ServerRPCChangeLightColor();
-			}
-		), 1.0f, true, 0.0f);
+		//FTimerHandle Handle;
+		//GetWorld()->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([&]
+		//	{
+		//		// 서버 RPC
+		//		ServerRPCChangeLightColor();
+		//	}
+		//), 1.0f, true, 0.0f);
 	}
 }
 
@@ -143,29 +158,29 @@ void AABFountain::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	/*DOREPLIFETIME(AABFountain, BigData);*/
 }
 
-void AABFountain::OnActorChannelOpen(FInBunch& InBunch, UNetConnection* Connection)
-{
-	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
-	Super::OnActorChannelOpen(InBunch, Connection);
-	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
-}
-
-bool AABFountain::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const
-{
-	bool NetRelevantResult = Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
-	if (!NetRelevantResult)
-	{
-		AB_LOG(LogABNetwork, Log, TEXT("Not Relevant:[%s] %s"), *RealViewer->GetName(), *SrcLocation.ToCompactString());
-	}
-	return NetRelevantResult;
-}
-
-void AABFountain::PreReplication(IRepChangedPropertyTracker& ChangedPropertyTracker)
-{
-	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
-	Super::PreReplication(ChangedPropertyTracker);
-	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
-}
+//void AABFountain::OnActorChannelOpen(FInBunch& InBunch, UNetConnection* Connection)
+//{
+//	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+//	Super::OnActorChannelOpen(InBunch, Connection);
+//	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
+//}
+//
+//bool AABFountain::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const
+//{
+//	bool NetRelevantResult = Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
+//	if (!NetRelevantResult)
+//	{
+//		AB_LOG(LogABNetwork, Log, TEXT("Not Relevant:[%s] %s"), *RealViewer->GetName(), *SrcLocation.ToCompactString());
+//	}
+//	return NetRelevantResult;
+//}
+//
+//void AABFountain::PreReplication(IRepChangedPropertyTracker& ChangedPropertyTracker)
+//{
+//	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+//	Super::PreReplication(ChangedPropertyTracker);
+//	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
+//}
 
 void AABFountain::OnRep_ServerLightColor()
 {
@@ -183,7 +198,7 @@ void AABFountain::OnRep_ServerLightColor()
 
 bool AABFountain::ServerRPCChangeLightColor_Validate()
 {
-	return false;
+	return true;
 }
 
 void AABFountain::ServerRPCChangeLightColor_Implementation()
@@ -193,6 +208,16 @@ void AABFountain::ServerRPCChangeLightColor_Implementation()
 }
 
 void AABFountain::MulticastRPCChangeLightColor_Implementation(const FLinearColor& NewColor)
+{
+	AB_LOG(LogABNetwork, Log, TEXT("ServerLight Color : % s"), *NewColor.ToString());
+	UPointLightComponent* PointLight = Cast<UPointLightComponent>(GetComponentByClass(UPointLightComponent::StaticClass()));
+	if (PointLight)
+	{
+		PointLight->SetLightColor(NewColor);
+	}
+}
+
+void AABFountain::ClientRPCChangeLightColor_Implementation(const FLinearColor& NewColor)
 {
 	AB_LOG(LogABNetwork, Log, TEXT("ServerLight Color : % s"), *NewColor.ToString());
 	UPointLightComponent* PointLight = Cast<UPointLightComponent>(GetComponentByClass(UPointLightComponent::StaticClass()));
