@@ -5,5 +5,8 @@
 
 
 DEFINE_LOG_CATEGORY(LogABNetwork);
+DEFINE_LOG_CATEGORY(LogABTeleport);
+
+
 
 IMPLEMENT_PRIMARY_GAME_MODULE( FDefaultGameModuleImpl, ArenaBattle, "ArenaBattle" );
