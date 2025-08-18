@@ -82,4 +82,6 @@ protected:
 	void OnRep_ModifierStat();
 	
 
+public:
+	void ResetStat();
 };

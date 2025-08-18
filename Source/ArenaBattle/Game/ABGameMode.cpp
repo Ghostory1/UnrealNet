@@ -6,6 +6,10 @@
 #include "Player/ABPlayerController.h"
 #include "ArenaBattle.h"
 #include "ABGameState.h"
+#include "GameFramework/PlayerStart.h"
+#include "EngineUtils.h"
+#include "ABPlayerState.h"
+
 AABGameMode::AABGameMode()
 {
 	static ConstructorHelpers::FClassFinder<APawn> DefaultPawnClassRef(TEXT("/Script/Engine.Blueprint'/Game/ArenaBattle/Blueprint/BP_ABCharacterPlayer.BP_ABCharacterPlayer_C'"));
@@ -20,12 +24,37 @@ AABGameMode::AABGameMode()
 		PlayerControllerClass = PlayerControllerClassRef.Class;
 	}
 	GameStateClass = AABGameState::StaticClass();
+	PlayerStateClass = AABPlayerState::StaticClass();
 }
 
-void AABGameMode::OnPlayerDead()
+FTransform AABGameMode::GetRandomStartTransform() const
 {
-
+	if (PlayerStartArray.Num() == 0)
+	{
+		return FTransform(FVector(0.0f, 0.0f, 230.0f));
+	}
+	
+	int32 RandIndex = FMath::RandRange(0, PlayerStartArray.Num() - 1);
+	return PlayerStartArray[RandIndex]->GetActorTransform();
 }
+
+void AABGameMode::OnPlayerKilled(AController* Killer, AController* KilledPlayer, APawn* KilledPawn)
+{
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+
+	APlayerState* KillerPlayerState = Killer->PlayerState;
+	if (KillerPlayerState)
+	{
+		KillerPlayerState->SetScore(KillerPlayerState->GetScore() + 1);
+	}
+
+	if (KillerPlayerState->GetScore() > 2)
+	{
+		FinishMatch();
+	}
+}
+
+
 
 //void AABGameMode::PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
 //{
@@ -79,10 +108,51 @@ void AABGameMode::OnPlayerDead()
 //	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
 //}
 //
-//void AABGameMode::StartPlay()
-//{
-//	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
-//
-//	Super::StartPlay();
-//	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
-//}
+void AABGameMode::StartPlay()
+{
+	Super::StartPlay();
+	
+	for (APlayerStart* PlayerStart : TActorRange<APlayerStart>(GetWorld()))
+	{
+		PlayerStartArray.Add(PlayerStart);
+	}
+}
+
+void AABGameMode::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+
+	GetWorldTimerManager().SetTimer(GameTimerHandle, this, &AABGameMode::DefaultGameTimer, GetWorldSettings()->GetEffectiveTimeDilation(), true);
+}
+
+void AABGameMode::DefaultGameTimer()
+{
+	AABGameState* const ABGameState = Cast<AABGameState>(GameState);
+	AB_LOG(LogABNetwork, Log, TEXT("RemainingTime : %d"), ABGameState->RemainingTime);
+	if (ABGameState && ABGameState->RemainingTime > 0)
+	{
+		ABGameState->RemainingTime--;
+
+		if (ABGameState->RemainingTime <= 0)
+		{
+			if (GetMatchState() == MatchState::InProgress)
+			{
+				FinishMatch();
+			}
+			else if (GetMatchState() == MatchState::WaitingPostMatch)
+			{
+				GetWorld()->ServerTravel(TEXT("/Game/ArenaBattle/Maps/Part3Step2?listen"));
+			}
+		}
+	}
+}
+
+void AABGameMode::FinishMatch()
+{
+	AABGameState* const ABGameState = Cast<AABGameState>(GameState);
+	if ( ABGameState && IsMatchInProgress())
+	{
+		EndMatch();
+		ABGameState->RemainingTime = ABGameState->ShowResultWaitingTime;
+	}
+}

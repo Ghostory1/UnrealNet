@@ -20,6 +20,9 @@
 #include "GameFramework/GameStateBase.h"
 #include "EngineUtils.h"
 #include "ABCharacterMovementComponent.h"
+#include "UI/ABWidgetComponent.h"
+#include "GameFramework/PlayerState.h"
+#include "Engine/AssetManager.h"
 
 AABCharacterPlayer::AABCharacterPlayer(const FObjectInitializer& ObjectInitializer)
 	:Super(ObjectInitializer.SetDefaultSubobjectClass<UABCharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
@@ -99,39 +102,19 @@ void AABCharacterPlayer::BeginPlay()
 void AABCharacterPlayer::SetDead()
 {
 	Super::SetDead();
-
-	APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	
+	GetWorldTimerManager().SetTimer(DeadTimerHandle, this, &AABCharacterPlayer::ResetPlayer, 5.0f, false);
+	/*APlayerController* PlayerController = Cast<APlayerController>(GetController());
 	if (PlayerController)
 	{
 		DisableInput(PlayerController);
-	}
+	}*/
 }
 
 void AABCharacterPlayer::PossessedBy(AController* NewController)
 {
-	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
-	AActor* OwnerActor = GetOwner();
-	if (OwnerActor)
-	{
-		AB_LOG(LogABNetwork, Log, TEXT("Owner : %s"), *OwnerActor->GetName());
-	}
-	else
-	{
-		AB_LOG(LogABNetwork, Log, TEXT("%s"),TEXT("No Owner"));
-	}
 	Super::PossessedBy(NewController);
-
-	OwnerActor = GetOwner();
-	if (OwnerActor)
-	{
-		AB_LOG(LogABNetwork, Log, TEXT("Owner : %s"), *OwnerActor->GetName());
-	}
-	else
-	{
-		AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("No Owner"));
-	}
-
-	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
+	UpdateMeshFromPlayerState();
 }
 
 void AABCharacterPlayer::OnRep_Owner()
@@ -291,14 +274,8 @@ void AABCharacterPlayer::Attack()
 		{
 			bCanAttack = false;
 			GetCharacterMovement()->SetMovementMode(EMovementMode::MOVE_None);
-			FTimerHandle Handle;
-			GetWorld()->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([&]
-				{
 
-					bCanAttack = true;
-					GetCharacterMovement()->SetMovementMode(EMovementMode::MOVE_Walking);
-				}
-			), AttackTime, false, -1.0f);
+			GetWorldTimerManager().SetTimer(AttackTimerHandle, this, &AABCharacterPlayer::ResetAttack, AttackTime, false);
 
 			PlayAttackAnimation();
 		}
@@ -347,7 +324,7 @@ void AABCharacterPlayer::DrawDebugAttackRange(const FColor& DrawColor, FVector T
 	const float AttackRadius = Stat->GetAttackRadius();
 	FVector CapsuleOrigin = TraceStart + (TraceEnd - TraceStart) * 0.5f;
 	float CapsuleHalfHeight = AttackRange * 0.5f;
-	DrawDebugCapsule(GetWorld(), CapsuleOrigin, CapsuleHalfHeight, AttackRadius, FRotationMatrix::MakeFromZ(GetActorForwardVector()).ToQuat(), DrawColor, false, 5.0f);
+	DrawDebugCapsule(GetWorld(), CapsuleOrigin, CapsuleHalfHeight, AttackRadius, FRotationMatrix::MakeFromZ(Forward).ToQuat(), DrawColor, false, 5.0f);
 
 #endif
 }
@@ -416,7 +393,7 @@ bool AABCharacterPlayer::ServerRPCAttack_Validate(float AttackStartTime)
 		return true;
 	}
 	// 마지막으로 공격한 시간과 다시 공격한 시간이 기본으로 설정된 공격 시간보다 작게 되면 어디 문제( 다른 사람보다 많이 공격하게 되는거이니 ) 가 있는것이니 
-	return (AttackStartTime - LastAttackStartTime) > AttackTime;
+	return (AttackStartTime - LastAttackStartTime) > (AttackTime - 0.4f);
 }
 
 
@@ -432,16 +409,9 @@ void AABCharacterPlayer::ServerRPCAttack_Implementation(float AttackStartTime)
 	AB_LOG(LogABNetwork, Log, TEXT("LagTime : %f"), AttackTimeDifference);
 	// 어택 타임을 모두 빼버리면 타이머가 동작 안할수도있으니 조금만 뺌
 	AttackTimeDifference = FMath::Clamp(AttackTimeDifference, 0.0f, AttackTime - 0.01f);
-
-	FTimerHandle Handle;
-	GetWorld()->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([&]
-	{
-
-			bCanAttack = true;
-			OnRep_CanAttack();
-	}
-	), AttackTime - AttackTimeDifference, false, -1.0f);
 	
+	GetWorldTimerManager().SetTimer(AttackTimerHandle, this, &AABCharacterPlayer::ResetAttack, AttackTime - AttackTimeDifference, false);
+
 	// 마지막으로 공격한 시간 기록
 	LastAttackStartTime = AttackStartTime;
 
@@ -527,11 +497,13 @@ bool AABCharacterPlayer::ServerRPCNotifyMiss_Validate(FVector_NetQuantizeNormal 
 {
 
 	return (HitCheckTime - LastAttackStartTime) > AcceptMinCheckTime;
+
 }
 
 void AABCharacterPlayer::ServerRPCNotifyMiss_Implementation(FVector_NetQuantizeNormal TraceStart, FVector_NetQuantizeNormal TraceEnd, FVector_NetQuantizeNormal TraceDir ,float HitCheckTime)
 {
 	DrawDebugAttackRange(FColor::Red, TraceStart, TraceEnd, TraceDir);
+
 }
 
 void AABCharacterPlayer::OnRep_CanAttack()
@@ -572,4 +544,62 @@ void AABCharacterPlayer::Teleport()
 	{
 		ABMovementComp->SetTeleportCommand();
 	}
+}
+
+void AABCharacterPlayer::ResetPlayer()
+{
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance)
+	{
+		AnimInstance->StopAllMontages(0.0f);
+	}
+	Stat->SetLevelStat(1);
+	Stat->ResetStat();
+	GetCharacterMovement()->SetMovementMode(EMovementMode::MOVE_Walking);
+	SetActorEnableCollision(true);
+	HpBar->SetHiddenInGame(false);
+
+	if (HasAuthority())
+	{
+		IABGameInterface* ABGameMode = GetWorld()->GetAuthGameMode<IABGameInterface>();
+		if (ABGameMode)
+		{
+			FTransform NewTransform = ABGameMode->GetRandomStartTransform();
+			TeleportTo(NewTransform.GetLocation(), NewTransform.GetRotation().Rotator());
+		}
+	}
+}
+
+void AABCharacterPlayer::ResetAttack()
+{
+	bCanAttack = true;
+	GetCharacterMovement()->SetMovementMode(EMovementMode::MOVE_Walking);
+}
+
+float AABCharacterPlayer::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
+{
+	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	if (Stat->GetCurrentHp() <= 0.0f)
+	{
+		// 현재 HP가 아주 작은 경우에는 게임모드에게 알려줌
+		IABGameInterface* ABGameMode = GetWorld()->GetAuthGameMode<IABGameInterface>();
+		if (ABGameMode)
+		{
+			ABGameMode->OnPlayerKilled(EventInstigator,GetController(),this);
+		}
+	}
+	return ActualDamage;
+}
+
+void AABCharacterPlayer::UpdateMeshFromPlayerState()
+{
+	int32 MeshIndex = FMath::Clamp(GetPlayerState()->GetPlayerId() % PlayerMeshes.Num(), 0, PlayerMeshes.Num() - 1);
+	MeshHandle = UAssetManager::Get().GetStreamableManager().RequestAsyncLoad(PlayerMeshes[MeshIndex], FStreamableDelegate::CreateUObject(this, &AABCharacterBase::MeshLoadCompleted));
+}
+
+void AABCharacterPlayer::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	UpdateMeshFromPlayerState();
 }
