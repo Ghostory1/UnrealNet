@@ -22,7 +22,10 @@ void UABCharacterStatComponent::InitializeComponent()
 	Super::InitializeComponent();
 
 	SetLevelStat(CurrentLevel);
-	SetHp(BaseStat.MaxHp);
+	MaxHp = BaseStat.MaxHp;
+	SetHp(MaxHp);
+
+	OnStatChanged.AddUObject(this, &UABCharacterStatComponent::SetNewMaxHp);
 }
 
 void UABCharacterStatComponent::SetLevelStat(int32 InNewLevel)
@@ -48,9 +51,9 @@ float UABCharacterStatComponent::ApplyDamage(float InDamage)
 
 void UABCharacterStatComponent::SetHp(float NewHp)
 {
-	CurrentHp = FMath::Clamp<float>(NewHp, 0.0f, BaseStat.MaxHp);
+	CurrentHp = FMath::Clamp<float>(NewHp, 0.0f, MaxHp);
 	
-	OnHpChanged.Broadcast(CurrentHp);
+	OnHpChanged.Broadcast(CurrentHp, MaxHp);
 }
 
 void UABCharacterStatComponent::BeginPlay()
@@ -71,13 +74,43 @@ void UABCharacterStatComponent::GetLifetimeReplicatedProps(TArray< FLifetimeProp
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(UABCharacterStatComponent, CurrentHp);
+	DOREPLIFETIME(UABCharacterStatComponent, MaxHp);
+	DOREPLIFETIME_CONDITION(UABCharacterStatComponent, BaseStat , COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UABCharacterStatComponent, ModifierStat, COND_OwnerOnly);
+}
+void UABCharacterStatComponent::SetNewMaxHp(const FABCharacterStat& InBaseStat, const FABCharacterStat& InModifierStat)
+{
+	float PrevMaxHp = MaxHp;
+	MaxHp = GetTotalStat().MaxHp;
+	if (PrevMaxHp != MaxHp)
+	{
+		OnHpChanged.Broadcast(CurrentHp, MaxHp);
+	}
 }
 void UABCharacterStatComponent::OnRep_CurrentHp()
 {
 	AB_SUBLOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
-	OnHpChanged.Broadcast(CurrentHp);
+	OnHpChanged.Broadcast(CurrentHp, MaxHp);
 	if (CurrentHp <= KINDA_SMALL_NUMBER)
 	{
 		OnHpZero.Broadcast();
 	}
+}
+
+void UABCharacterStatComponent::OnRep_MaxHp()
+{
+	AB_SUBLOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+	OnHpChanged.Broadcast(CurrentHp, MaxHp);
+}
+
+void UABCharacterStatComponent::OnRep_BaseStat()
+{
+	AB_SUBLOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+	OnStatChanged.Broadcast(BaseStat, ModifierStat);
+}
+
+void UABCharacterStatComponent::OnRep_ModifierStat()
+{
+	AB_SUBLOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+	OnStatChanged.Broadcast(BaseStat, ModifierStat);
 }
